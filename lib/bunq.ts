@@ -82,26 +82,6 @@ function signData(data: string, privateKeyPem: string): string {
   return sign.sign(privateKeyPem, "base64");
 }
 
-function buildSignatureString(
-  method: string,
-  urlPath: string,
-  headers: Record<string, string>,
-  body: string
-): string {
-  const toSign = [
-    "X-Bunq-Client-Authentication",
-    "X-Bunq-Client-Request-Id",
-    "X-Bunq-Geolocation",
-    "X-Bunq-Language",
-    "X-Bunq-Region",
-  ];
-  const headerLines = toSign
-    .filter((h) => headers[h])
-    .map((h) => `${h}: ${headers[h]}`)
-    .join("\n");
-  return `${method} ${urlPath}\n${headerLines}\n\n${body}`;
-}
-
 function makeRequestId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
@@ -129,10 +109,7 @@ async function bunqRequest(
 
   if (authToken) headers["X-Bunq-Client-Authentication"] = authToken;
   if (privateKey) {
-    headers["X-Bunq-Client-Signature"] = signData(
-      buildSignatureString(method, urlPath, headers, bodyStr),
-      privateKey
-    );
+    headers["X-Bunq-Client-Signature"] = signData(bodyStr, privateKey);
   }
 
   const res = await fetch(`${getBaseUrl()}${urlPath}`, {
@@ -214,7 +191,7 @@ async function authenticate(): Promise<SessionData> {
 
     // Step 2 — Device server
     await bunqRequest("POST", "/v1/device-server", {
-      description: "Context Split — bunq Hackathon",
+      description: "Splitify — bunq Hackathon",
       secret: apiKey,
       permitted_ips: ["*"],
     }, installationToken, privateKey);
@@ -229,20 +206,29 @@ async function authenticate(): Promise<SessionData> {
       sessionResp.Response.find((r) => r.UserCompany)?.UserCompany?.id;
     if (!sessionToken || !userId) throw new Error("Session auth failed");
 
-    // Step 4 — Primary monetary account
-    const accountsResp = (await bunqRequest("GET", `/v1/user/${userId}/monetary-account`, null, sessionToken, privateKey)) as {
-      Response: Array<{ MonetaryAccountBank?: { id: number; status: string } }>;
-    };
-    const activeAccount = accountsResp.Response.find(
-      (r) => r.MonetaryAccountBank?.status === "ACTIVE"
-    )?.MonetaryAccountBank;
-    if (!activeAccount) throw new Error("No active monetary account found");
+    // Step 4 — Primary monetary account (use env overrides if available)
+    const envUserId = process.env.BUNQ_USER_ID ? Number(process.env.BUNQ_USER_ID) : userId;
+    const envAccountId = process.env.BUNQ_ACCOUNT_ID ? Number(process.env.BUNQ_ACCOUNT_ID) : null;
+
+    let accountId: number;
+    if (envAccountId) {
+      accountId = envAccountId;
+    } else {
+      const accountsResp = (await bunqRequest("GET", `/v1/user/${envUserId}/monetary-account`, null, sessionToken, privateKey)) as {
+        Response: Array<{ MonetaryAccountBank?: { id: number; status: string } }>;
+      };
+      const activeAccount = accountsResp.Response.find(
+        (r) => r.MonetaryAccountBank?.status === "ACTIVE"
+      )?.MonetaryAccountBank;
+      if (!activeAccount) throw new Error("No active monetary account found");
+      accountId = activeAccount.id;
+    }
 
     const session: SessionData = {
       apiKey,
       token: sessionToken,
-      userId,
-      accountId: activeAccount.id,
+      userId: envUserId,
+      accountId,
       privateKey,
       installationToken,
     };
@@ -250,7 +236,6 @@ async function authenticate(): Promise<SessionData> {
     persistSession(session);
     sessionCache = session;
     authFailedAt = null;
-    console.log(`bunq authenticated — user ${userId}, account ${activeAccount.id}`);
     return session;
   } catch (err) {
     authFailedAt = Date.now();
@@ -277,40 +262,19 @@ async function authenticatedRequest(method: string, urlPath: string, body: objec
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function getBunqContacts(): Promise<BunqContact[]> {
-  // In sandbox without an explicit API key we'll auto-create a user — skip contact
-  // fetch and return mocks so the UI has recognisable names to show.
-  if (!process.env.BUNQ_API_KEY) return MOCK_CONTACTS;
-
-  try {
-    const session = await authenticate();
-    const resp = (await authenticatedRequest("GET", `/v1/user/${session.userId}/contact`)) as {
-      Response: Array<{ Contact?: { name: string; alias: Array<{ type: string; value: string }> } }>;
-    };
-    return resp.Response.filter((r) => r.Contact).map((r, i) => ({
-      id: String(i + 1),
-      name: r.Contact!.name,
-      aliases: r.Contact!.alias.map((a) => ({ type: a.type, value: a.value })),
-    }));
-  } catch (err) {
-    console.error("bunq contacts fetch failed, using mock:", err);
-    return MOCK_CONTACTS;
-  }
+  return MOCK_CONTACTS;
 }
 
 export async function createRequestInquiry(
   counterpartyName: string,
-  _counterpartyAlias: { type: string; value: string },
+  counterpartyAlias: { type: string; value: string },
   amount: number,
   currency: string,
   description: string
 ): Promise<{ id: number }> {
   const session = await authenticate();
 
-  // In sandbox mode route every request through sugardaddy@bunq.com so it
-  // auto-accepts immediately — perfect for live demos.
-  const alias = isSandbox()
-    ? { type: "EMAIL", value: SANDBOX_SUGAR_DADDY, name: "Sugar Daddy" }
-    : { type: _counterpartyAlias.type, value: _counterpartyAlias.value, name: counterpartyName };
+  const alias = { type: counterpartyAlias.type, value: counterpartyAlias.value, name: counterpartyName };
 
   const resp = (await authenticatedRequest(
     "POST",
@@ -376,7 +340,7 @@ export async function createSandboxCounterparty(displayName: string): Promise<{ 
   const installToken = installResp.Response.find((r) => r.Token)?.Token?.token!;
 
   await bunqRequest("POST", "/v1/device-server", {
-    description: `Context Split — ${displayName}`,
+    description: `Splitify — ${displayName}`,
     secret: apiKey,
     permitted_ips: ["*"],
   }, installToken, privateKey);
