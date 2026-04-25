@@ -106,7 +106,12 @@ function TotalSummary({
               Demo Data
             </span>
           )}
-          <div className="mt-2 text-4xl">🧾</div>
+          <div className="mt-2 w-9 h-9 ml-auto text-gray-500">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 2h16v17l-2-1-2 1-2-1-2 1-2-1-2 1V2z" />
+              <path d="M8 7h8M8 11h8M8 15h5" />
+            </svg>
+          </div>
         </div>
       </div>
     </div>
@@ -244,28 +249,6 @@ export default function Home() {
             <span className="text-gradient">Context</span>
             <span className="text-white"> Split</span>
           </h1>
-          <p className="text-gray-400 text-lg max-w-md mx-auto leading-relaxed">
-            Upload a dinner video. AI reads your receipt and listens to who ordered what.
-            bunq handles the rest.
-          </p>
-
-          {/* Feature pills */}
-          <div className="flex flex-wrap justify-center gap-2 mt-6">
-            {[
-              { icon: "🎥", label: "Multimodal AI" },
-              { icon: "🧾", label: "Receipt OCR" },
-              { icon: "🎙️", label: "Audio detection" },
-              { icon: "💸", label: "bunq payments" },
-            ].map((f) => (
-              <div
-                key={f.label}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bunq-card border border-bunq-border text-sm text-gray-400"
-              >
-                <span>{f.icon}</span>
-                <span>{f.label}</span>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Main content */}
