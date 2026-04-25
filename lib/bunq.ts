@@ -30,7 +30,7 @@ const AUTH_RETRY_COOLDOWN_MS = 6 * 60 * 1000; // 6 min (bunq asks for 5)
 const MOCK_CONTACTS: BunqContact[] = DEMO_CONTACTS.map((c, i) => ({
   id: String(i + 1),
   name: c.name,
-  aliases: [{ type: "PHONE_NUMBER", value: c.phone }],
+  aliases: [{ type: "EMAIL", value: c.email }],
   matched: true,
 }));
 

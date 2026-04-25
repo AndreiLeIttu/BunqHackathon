@@ -291,7 +291,7 @@ export default function Home() {
                     index={i}
                     currency={analysisResult.currency}
                     requestStatus={requestStatuses.find((r) => r.name === split.name)}
-                    matchedPhone={lookupContact(split.name)?.phone}
+                    matchedEmail={lookupContact(split.name)?.email}
                   />
                 ))}
               </div>
