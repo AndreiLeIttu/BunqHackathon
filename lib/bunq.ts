@@ -191,7 +191,7 @@ async function authenticate(): Promise<SessionData> {
 
     // Step 2 — Device server
     await bunqRequest("POST", "/v1/device-server", {
-      description: "Context Split — bunq Hackathon",
+      description: "Splitify — bunq Hackathon",
       secret: apiKey,
       permitted_ips: ["*"],
     }, installationToken, privateKey);
@@ -340,7 +340,7 @@ export async function createSandboxCounterparty(displayName: string): Promise<{ 
   const installToken = installResp.Response.find((r) => r.Token)?.Token?.token!;
 
   await bunqRequest("POST", "/v1/device-server", {
-    description: `Context Split — ${displayName}`,
+    description: `Splitify — ${displayName}`,
     secret: apiKey,
     permitted_ips: ["*"],
   }, installToken, privateKey);

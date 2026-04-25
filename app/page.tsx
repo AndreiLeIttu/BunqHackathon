@@ -242,13 +242,9 @@ export default function Home() {
       <div className="relative z-10 max-w-3xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-bunq-purple/20 border border-bunq-purple/30 text-xs text-bunq-purple font-medium mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-bunq-purple animate-pulse" />
-            bunq Hackathon 2025
-          </div>
+      
           <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-none mb-4">
-            <span className="text-gradient">Context</span>
-            <span className="text-white"> Split</span>
+            <span className="text-gradient">Splitify</span>
           </h1>
         </div>
 
@@ -348,11 +344,6 @@ export default function Home() {
             )}
           </div>
         )}
-
-        {/* Footer */}
-        <div className="text-center mt-16 text-gray-700 text-xs">
-          Built with Claude claude-sonnet-4-6 · bunq Sandbox API · Next.js 16
-        </div>
       </div>
     </main>
   );
