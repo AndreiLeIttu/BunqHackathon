@@ -2,6 +2,7 @@ import { createSign, generateKeyPairSync } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { BunqContact, RequestStatus } from "@/types";
+import { DEMO_CONTACTS } from "@/lib/contacts";
 
 const SANDBOX_BASE = "https://public-api.sandbox.bunq.com";
 const PRODUCTION_BASE = "https://api.bunq.com";
@@ -26,12 +27,12 @@ let sessionCache: SessionData | null = null;
 let authFailedAt: number | null = null;
 const AUTH_RETRY_COOLDOWN_MS = 6 * 60 * 1000; // 6 min (bunq asks for 5)
 
-const MOCK_CONTACTS: BunqContact[] = [
-  { id: "101", name: "Alex Johnson",  aliases: [{ type: "EMAIL", value: "alex.johnson@example.com" }],  matched: true },
-  { id: "102", name: "Sarah Smith",   aliases: [{ type: "PHONE_NUMBER", value: "+31612345678" }],        matched: true },
-  { id: "103", name: "Marco Rossi",   aliases: [{ type: "EMAIL", value: "marco.rossi@example.com" }],   matched: true },
-  { id: "104", name: "Emma Wilson",   aliases: [{ type: "EMAIL", value: "emma.wilson@example.com" }],   matched: true },
-];
+const MOCK_CONTACTS: BunqContact[] = DEMO_CONTACTS.map((c, i) => ({
+  id: String(i + 1),
+  name: c.name,
+  aliases: [{ type: "PHONE_NUMBER", value: c.phone }],
+  matched: true,
+}));
 
 function isSandbox(): boolean {
   return process.env.BUNQ_ENVIRONMENT !== "production";

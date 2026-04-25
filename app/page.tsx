@@ -5,6 +5,7 @@ import VideoUploader from "@/components/VideoUploader";
 import { SplitReviewCard, SplitCardSkeleton } from "@/components/SplitReviewCard";
 import RequestsPanel from "@/components/RequestsPanel";
 import { AnalysisResult, RequestStatus, SendRequestsResponse } from "@/types";
+import { lookupContact } from "@/lib/contacts";
 
 const ConfettiEffect = lazy(() => import("@/components/ConfettiEffect"));
 
@@ -290,6 +291,7 @@ export default function Home() {
                     index={i}
                     currency={analysisResult.currency}
                     requestStatus={requestStatuses.find((r) => r.name === split.name)}
+                    matchedPhone={lookupContact(split.name)?.phone}
                   />
                 ))}
               </div>
