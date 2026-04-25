@@ -4,7 +4,8 @@ import { useState, useCallback, lazy, Suspense } from "react";
 import VideoUploader from "@/components/VideoUploader";
 import { SplitReviewCard, SplitCardSkeleton } from "@/components/SplitReviewCard";
 import RequestsPanel from "@/components/RequestsPanel";
-import { AnalysisResult, RequestStatus, SendRequestsResponse } from "@/types";
+import PartySetup from "@/components/PartySetup";
+import { AnalysisResult, Person, RequestStatus, SendRequestsResponse } from "@/types";
 
 const ConfettiEffect = lazy(() => import("@/components/ConfettiEffect"));
 
@@ -135,6 +136,7 @@ function SuccessBanner({ response }: { response: SendRequestsResponse }) {
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("idle");
+  const [people, setPeople] = useState<Person[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [requestStatuses, setRequestStatuses] = useState<RequestStatus[]>([]);
   const [sendResponse, setSendResponse] = useState<SendRequestsResponse | null>(null);
@@ -174,6 +176,14 @@ export default function Home() {
     }
   }, []);
 
+  const matchPerson = (splitName: string): Person | undefined => {
+    const lower = splitName.toLowerCase().trim();
+    return people.find((p) => {
+      const first = p.name.toLowerCase().split(/\s+/)[0];
+      return first === lower || p.name.toLowerCase() === lower;
+    });
+  };
+
   const handleSendRequests = async () => {
     if (!analysisResult) return;
     setAppState("sending");
@@ -187,6 +197,7 @@ export default function Home() {
           splits: analysisResult.splits,
           currency: analysisResult.currency,
           restaurant_name: analysisResult.restaurant_name,
+          people,
         }),
       });
 
@@ -271,6 +282,7 @@ export default function Home() {
         {/* Main content */}
         {(appState === "idle" || isProcessing) && (
           <>
+            <PartySetup people={people} onChange={setPeople} disabled={isProcessing} />
             <VideoUploader onUpload={handleVideoUpload} disabled={isProcessing} />
             {isProcessing && <ProcessingIndicator stage={appState} />}
           </>
@@ -307,6 +319,7 @@ export default function Home() {
                     index={i}
                     currency={analysisResult.currency}
                     requestStatus={requestStatuses.find((r) => r.name === split.name)}
+                    matchedEmail={matchPerson(split.name)?.email}
                   />
                 ))}
               </div>

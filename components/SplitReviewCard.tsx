@@ -48,6 +48,7 @@ interface SplitReviewCardProps {
   index: number;
   currency: string;
   requestStatus?: RequestStatus;
+  matchedEmail?: string;
 }
 
 export function SplitReviewCard({
@@ -55,6 +56,7 @@ export function SplitReviewCard({
   index,
   currency,
   requestStatus,
+  matchedEmail,
 }: SplitReviewCardProps) {
   const symbol = currency === "EUR" ? "€" : currency === "USD" ? "$" : currency + " ";
 
@@ -77,7 +79,11 @@ export function SplitReviewCard({
             <Avatar name={split.name} index={index} />
             <div>
               <h3 className="text-white font-semibold text-lg leading-tight">{split.name}</h3>
-              <p className="text-gray-500 text-xs mt-0.5 line-clamp-1">{split.justification}</p>
+              {matchedEmail ? (
+                <p className="text-bunq-purple/70 text-xs mt-0.5 truncate">{matchedEmail}</p>
+              ) : (
+                <p className="text-gray-500 text-xs mt-0.5 line-clamp-1">{split.justification}</p>
+              )}
             </div>
           </div>
           <div className="text-right">

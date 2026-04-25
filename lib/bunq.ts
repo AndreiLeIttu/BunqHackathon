@@ -404,7 +404,8 @@ export function matchContactToSplit(splitName: string, contacts: BunqContact[]):
 export async function sendAllRequests(
   splits: Array<{ name: string; amount_owed: number; justification: string }>,
   currency: string,
-  restaurantName: string
+  restaurantName: string,
+  people?: Array<{ name: string; email: string }>
 ): Promise<RequestStatus[]> {
   const results: RequestStatus[] = [];
 
@@ -426,8 +427,17 @@ export async function sendAllRequests(
       continue;
     }
 
+    // Prefer user-provided email, fall back to bunq contact lookup
+    const personEmail = people?.find((p) => {
+      const first = p.name.toLowerCase().split(/\s+/)[0];
+      const lower = split.name.toLowerCase().trim();
+      return first === lower || p.name.toLowerCase() === lower;
+    })?.email;
+
     const contact = matchContactToSplit(split.name, contacts);
-    const alias = contact?.aliases[0] ?? { type: "EMAIL", value: SANDBOX_SUGAR_DADDY };
+    const alias = personEmail
+      ? { type: "EMAIL", value: personEmail }
+      : (contact?.aliases[0] ?? { type: "EMAIL", value: SANDBOX_SUGAR_DADDY });
 
     try {
       const description = `${split.name}'s share from ${restaurantName || "dinner"}: ${split.justification}`;

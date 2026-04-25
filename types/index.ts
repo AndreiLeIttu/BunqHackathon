@@ -1,3 +1,8 @@
+export interface Person {
+  name: string;
+  email: string;
+}
+
 export interface SplitEntry {
   name: string;
   amount_owed: number;
@@ -34,6 +39,7 @@ export interface SendRequestsPayload {
   splits: SplitEntry[];
   currency: string;
   restaurant_name?: string;
+  people?: Person[];
 }
 
 export interface SendRequestsResponse {

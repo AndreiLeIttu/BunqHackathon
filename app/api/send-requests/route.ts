@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
     const results = await sendAllRequests(
       body.splits,
       body.currency || "EUR",
-      body.restaurant_name || "Dinner"
+      body.restaurant_name || "Dinner",
+      body.people
     );
 
     const response: SendRequestsResponse = {
