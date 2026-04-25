@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup:whisper": "node scripts/setup-whisper.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
@@ -16,6 +17,7 @@
     "ffmpeg-static": "^5.3.0",
     "fluent-ffmpeg": "^2.1.3",
     "next": "^16.2.4",
+    "nodejs-whisper": "^0.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeVideoWithClaude } from "@/lib/claude";
 
-export const maxDuration = 60;
+export const maxDuration = 300; // whisper model download + inference can take a while on first run
 
 const ALLOWED_MIME_TYPES = [
   "video/mp4",

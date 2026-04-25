@@ -4,6 +4,7 @@ import ffmpeg from "fluent-ffmpeg";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { nodewhisper } from "nodejs-whisper";
 import { AnalysisResult } from "@/types";
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
@@ -56,10 +57,14 @@ const MOCK_RESULT: AnalysisResult = {
 };
 
 const SYSTEM_PROMPT = `You are a receipt and conversation analyzer for a bill-splitting app.
-You will receive several video frames (screenshots taken every few seconds) from a short dinner video.
+You will receive several video frames (screenshots taken every few seconds) from a short dinner video,
+and optionally an audio transcript of what was said during the video.
+
 The video shows a restaurant receipt and/or people discussing who ordered what.
 
 Analyze ALL frames carefully — the receipt may appear in one frame, and people may be talking in others.
+If an audio transcript is provided, use it as the PRIMARY source for identifying who ordered which items.
+Cross-reference the transcript with receipt items visible in the frames to build accurate splits.
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanation):
 {
@@ -80,26 +85,22 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
 }
 
 Rules:
-- Look at all frames for receipt text and visible names/labels
+- Read receipt items and prices from the video frames
+- Use the audio transcript (if provided) to determine who ordered what
 - Split shared items evenly among the people who shared them
 - Ensure all split amounts sum to total_amount
 - If you cannot read the receipt clearly, make reasonable estimates based on visible context
 - Return ONLY the JSON object`;
 
-function extractFrames(videoBuffer: Buffer, mimeType: string): Promise<string[]> {
+function extractFramesFromFile(videoPath: string, tmpDir: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctx-split-"));
-    const ext = mimeType.includes("quicktime") ? "mov" : "mp4";
-    const videoPath = path.join(tmpDir, `input.${ext}`);
     const framePattern = path.join(tmpDir, "frame-%02d.jpg");
-
-    fs.writeFileSync(videoPath, videoBuffer);
 
     ffmpeg(videoPath)
       .outputOptions([
-        "-vf", "fps=1/4,scale=1280:-1",  // one frame every 4 seconds, max 1280px wide
-        "-q:v", "4",                       // good quality JPEG
-        "-frames:v", "8",                  // max 8 frames
+        "-vf", "fps=1/4,scale=1280:-1",
+        "-q:v", "4",
+        "-frames:v", "8",
       ])
       .output(framePattern)
       .on("end", () => {
@@ -112,15 +113,47 @@ function extractFrames(videoBuffer: Buffer, mimeType: string): Promise<string[]>
           i++;
           if (i > 8) break;
         }
-        fs.rmSync(tmpDir, { recursive: true, force: true });
         resolve(frames);
       })
-      .on("error", (err) => {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-        reject(err);
-      })
+      .on("error", reject)
       .run();
   });
+}
+
+function extractAudioFromFile(videoPath: string, audioPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .outputOptions([
+        "-vn",          // no video stream
+        "-ar", "16000", // 16 kHz — required by whisper.cpp
+        "-ac", "1",     // mono
+        "-f", "wav",
+      ])
+      .output(audioPath)
+      .on("end", () => resolve())
+      .on("error", reject)
+      .run();
+  });
+}
+
+async function transcribeAudio(audioPath: string): Promise<string> {
+  const result = await nodewhisper(audioPath, {
+    modelName: "base.en",
+    autoDownloadModelName: "base.en",
+    removeWavFileAfterTranscription: false,
+    withCuda: false,
+    whisperOptions: {
+      outputInText: false,
+      outputInVtt: false,
+      outputInSrt: false,
+      outputInCsv: false,
+      translateToEnglish: false,
+      wordTimestamps: false,
+      timestamps_length: 20,
+      splitOnWord: true,
+    },
+  });
+  return typeof result === "string" ? result.trim() : JSON.stringify(result);
 }
 
 export async function analyzeVideoWithClaude(
@@ -135,13 +168,41 @@ export async function analyzeVideoWithClaude(
     return MOCK_RESULT;
   }
 
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctx-split-"));
+  const ext = mimeType.includes("quicktime") ? "mov" : "mp4";
+  const videoPath = path.join(tmpDir, `input.${ext}`);
+  const audioPath = path.join(tmpDir, "audio.wav");
+
+  fs.writeFileSync(videoPath, videoBuffer);
+
   let frames: string[] = [];
+  let transcript = "";
+
   try {
-    frames = await extractFrames(videoBuffer, mimeType);
-  } catch (err) {
-    console.error("Frame extraction failed:", err);
-    console.warn("Falling back to mock data");
-    return MOCK_RESULT;
+    // Extract frames and audio from the video in parallel
+    const [extractedFrames] = await Promise.all([
+      extractFramesFromFile(videoPath, tmpDir).catch((err) => {
+        console.error("Frame extraction failed:", err);
+        return [] as string[];
+      }),
+      extractAudioFromFile(videoPath, audioPath).catch((err) => {
+        console.warn("Audio extraction failed (transcription will be skipped):", err);
+      }),
+    ]);
+    frames = extractedFrames;
+
+    // Transcribe audio with whisper.cpp if the WAV was produced
+    if (fs.existsSync(audioPath)) {
+      try {
+        console.log("Transcribing audio with whisper.cpp...");
+        transcript = await transcribeAudio(audioPath);
+        console.log(`Transcription (${transcript.length} chars): ${transcript.slice(0, 200)}`);
+      } catch (err) {
+        console.warn("Whisper transcription failed (will proceed with frames only):", err);
+      }
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
   if (frames.length === 0) {
@@ -151,11 +212,14 @@ export async function analyzeVideoWithClaude(
 
   const client = new Anthropic({ apiKey });
 
-  // Build image content blocks from extracted frames
   const imageBlocks: Anthropic.ImageBlockParam[] = frames.map((b64) => ({
     type: "image",
     source: { type: "base64", media_type: "image/jpeg", data: b64 },
   }));
+
+  const userText = transcript
+    ? `These are ${frames.length} frames from the dinner video.\n\nAudio transcript of what was said:\n"""\n${transcript}\n"""\n\nPlease analyze the frames and transcript to return the JSON split result.`
+    : `These are ${frames.length} frames extracted from the dinner video (no audio transcript available). Please analyze them and return the JSON split result.`;
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
@@ -164,7 +228,7 @@ export async function analyzeVideoWithClaude(
       {
         type: "text",
         text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" }, // cache the large static prompt
+        cache_control: { type: "ephemeral" },
       },
     ],
     messages: [
@@ -172,10 +236,7 @@ export async function analyzeVideoWithClaude(
         role: "user",
         content: [
           ...imageBlocks,
-          {
-            type: "text",
-            text: `These are ${frames.length} frames extracted from the dinner video. Please analyze them and return the JSON split result.`,
-          },
+          { type: "text", text: userText },
         ],
       },
     ],
@@ -183,7 +244,6 @@ export async function analyzeVideoWithClaude(
 
   const text = response.content[0].type === "text" ? response.content[0].text : "";
 
-  // Strip markdown code fences if present
   const cleaned = text
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
